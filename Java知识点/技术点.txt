@@ -1,0 +1,742 @@
+1,Nginx，Redis，Mycat,dubbo,rabbitMQ,solr,docker,
+2,hashmap
+3,RestFul
+4,SpringMVC SPRING Mybatis
+
+
+>Nginx
+	>>1,理解：一个中间服务器，主要用来做服务器的代理。轻量且高效
+	>>2,能干什么？
+		>>>1,Http代理，反向代理：作为web服务器最常用的功能   Nginx并发能力:50000次并发/s 真实数据 2-3万之间
+			>>>>1,正向代理和反向代理的却别是什么？
+			>>>>>1、正向代理类似于一个跳板机，代理访问外部资源。（需要在浏览器配置代理服务器的ip和port）
+			
+				举个例子：我是一个用户，我访问不了某网站，但是我能访问一个代理服务器，
+				这个代理服务器呢,他能访问那个我不能访问的网站，于是我先连上代理服务器,
+				告诉他我需要那个无法访问网站的内容，代理服务器去取回来,然后返回给我。
+				从网站的角度，只在代理服务器来取内容的时候有一次记录，有时候并不知道是用户的请求，
+				也隐藏了用户的资料，这取决于代理告不告诉网站。
+
+			****客户端必须设置正向代理服务器，当然前提是要知道正向代理服务器的IP地址，还有代理程序的端口。****
+				例如之前使用过这类软件例如CCproxy，http://www.ccproxy.com/ 需要在浏览器中配置代理的地址。
+				浏览器设置->连接->局域网设置
+				
+			总结来说：正向代理 是一个位于客户端和原始服务器(origin server)之间的服务器，为了从原始服务器取得内容，
+				客户端向代理发送一个请求并指定目标(原始服务器)，然后代理向原始服务器转交请求并将获得的内容返回给客户端。
+				正向代理的用途：
+				
+　　			（1）访问原来无法访问的资源，如google
+     			（2） 可以做缓存，加速访问资源
+　　			（3）对客户端访问授权，上网进行认证
+　　			（4）代理可以记录用户访问记录（上网行为管理），对外隐藏用户信息
+
+				例如CCProxy用途：客户端必须要进行一些特别的设置才能使用正向代理。
+				意思是用CCProxy可以共享上网和管理管理客户端上网的权限。
+				
+			>>>>>2、反向代理对外是透明的，访问者不知道自己访问的是一个代理（客户端不需要任何配置就可以访问）
+				反向代理（Reserve Proxy）实际运作方式以代理服务器接受internet上的请求，然后将请求转发给内部网络上的服务器，
+					并将服务器上得到的结果返回返回给internet上请求连接的客户端，此时代理服务器对外表现为一服务器.
+				反向代理的作用:
+					(1)保证内网的安全,可以使用反向代理提供WAF(web application firewall),阻止web攻击
+						大型网站都是把Nginx对外提供的是公网地址,web服务器是内网
+					(2)负载均衡,通过代理服务器来优化网站的负载
+						就是web服务器A,web服务器B,web服务器C分别承担web应用访问.
+
+			总结:正向代理,proxy和client同属一个LAN,对server透明
+				反向代理,proxy和server同属一个LAN,对client透明
+				实际上proxy在两种代理中做的事都是代发请求和响应,不过从结构上来看左右互换了下,
+				所以把后出现的那种代理方式叫成反向代理.
+				
+		>>>2,负载均衡
+			Nginx提供的负载均衡策略有2种：内置策略和扩展策略
+			内置策略==>为轮询，加权轮询，Ip hash。
+			扩展策略==>，就天马行空，只有你想不到的没有他做不到的啦，你可以参照所有的负载均衡算法，给他一一找出来做下实现
+			Ip hash算法，对客户端请求的ip进行hash操作，然后根据hash结果将同一个客户端ip的请求分发给同一台服务器进行处理，
+			可以解决session不共享的问题
+
+			Nginx配置文件
+			...              #全局块
+
+			events {         #events块
+			   ...
+			}
+
+			http      #http块
+			{
+			    ...   #http全局块
+			    server        #server块
+			    { 
+			        ...       #server全局块
+			        location [PATTERN]   #location块
+			        {
+			            ...
+			        }
+			        location [PATTERN] 
+			        {
+			            ...
+			        }
+			    }
+			    server
+			    {
+			      ...
+			    }
+			    ...     #http全局块
+			}
+			1、全局块：配置影响nginx全局的指令。一般有运行nginx服务器的用户组，nginx进程pid存放路径，日志存放路径，配置文件引入，允许生成worker process数等。
+
+			2、events块：配置影响nginx服务器或与用户的网络连接。有每个进程的最大连接数，选取哪种事件驱动模型处理连接请求，是否允许同时接受多个网路连接，开启多个网络连接序列化等。
+
+			3、http块：可以嵌套多个server，配置代理，缓存，日志定义等绝大多数功能和第三方模块的配置。如文件引入，mime-type定义，日志自定义，是否使用sendfile传输文件，连接超时时间，单连接请求数等。
+
+			4、server块：配置虚拟主机的相关参数，一个http中可以有多个server。
+
+			5、location块：配置请求的路由，以及各种页面的处理情况。
+		>>>3、web缓存
+
+			Nginx可以对不同的文件做不同的缓存处理，配置灵活，并且支持FastCGI_Cache，主要用于对FastCGI的动态程序进行缓存。配合着第三方的ngx_cache_purge，对制定的URL缓存内容可以的进行增删管理。
+
+		>>>4、Nginx相关地址
+
+		源码：https://trac.nginx.org/nginx/browser
+
+		官网：http://www.nginx.org/
+		
+	>>2,怎么玩?
+		>>>1,Nginx下载
+			去官网下载,不要放在C盘和中文目录下
+		>>>2,Nginx启动
+			注意:首先第一次使用时,使用超级管理员权限运行.
+			说明:Nginx底层是C语言开发的.当以超级管理员权限运行时,会快速的执行,并且在操作系统中开启2个进程.
+			 
+			>>>>1,关于进程说明:
+				 一个是主进程:主要提供Nginx服务
+				一个是守护进程:防止主进程意外关闭的.如果主进程意外关闭了,则再次启动主进程.
+				所以关闭nginx的进程应该先关闭守护进程(内存占用少的),之后关闭主进程(内存占用多的)
+
+			>>>>2.关于Nginx的命令(进入Nginx的exe存放路径,在路径框下输入cmd,瞬间到CDM中,然后再输命令)
+				启动Nginx: start nginx
+				关闭Nginx: nginx -s stop
+				重启Nginx: nginx -s reload
+				注意事项:Nginx的命令的执行必须在Nginx的根目录下执行.
+		>>>3,Nginx实现默认跳转
+				浏览器输入localhost,默认访问的Nginx的首页
+				问题:如何实现该操作的??
+				案例分析:
+					server {
+				    	#默认监听80端口
+				        listen       80;
+				        #拦截的请求路径    
+				        server_name  localhost;
+
+				        #charset koi8-r;
+
+				        #access_log  logs/host.access.log  main;
+
+				        location / {
+				        	#root表示 将请求转向到具体的文件夹中
+				            root   html;
+
+				            #index 表示默认的访问页面
+				            index  index.html index.htm;
+				        }
+					}
+
+		>>>4,Nginx实现图片信息回显	(笔者电脑用的是华硕FX63VD游戏本,配置物理地址用的分隔符不一样)	
+			#图片服务器
+			#可能是电脑的是，用D:\\test或者D:/test
+			server {
+				listen 80;
+				server_name image.jt.com;
+				
+				location / {
+					root   D:\\test;
+				}
+			}
+			---------------------------下面是达内培优班刘昱江老师配置----------------------------
+			#图片服务器
+			server {
+				listen 80;
+				server_name image.jt.com;
+
+				location / {
+
+					root E:\jt-upload;
+				}
+			}
+
+			编辑HOST文件
+				说明:让image.jt.com访问时,必须访问本机,才能被Nginx所拦截,实现方向代理技术.
+
+				修改完成后,将Nginx重启
+				windows xp/2003/vista/2008/7/8用户HOSTS文件是在“c:\windows\system32\drivers\etc
+				笔者路径:C:\Windows\System32\drivers\etc\hosts (按图索骥)
+				****有个工具可以代替去找SwitchHosts,注意:用管理员mode启动
+
+			
+			跟我配套的代码可以实现商品图片的回显.代码不做解释.使用框架是SSM.数据库用的是mysql
+				具体操作步骤是:浏览器输入http://manage.jt.com/index ->上传图片就会网页显示图片
+
+	[Nginx参考引用文章地址:]
+		1,https://www.cnblogs.com/knowledgesea/p/5175711.html
+		2,https://www.cnblogs.com/Anker/p/6056540.html
+		3,达内刘昱江老师笔记
+
+>Redis	默认情况下，redis-server会以非daemon的方式来运行，且默认服务端口为6379。
+	>>1,什么是redis？
+		redis是一个开源的、使用C语言编写的、支持网络交互的、可基于内存也可持久化的Key-Value数据库。
+		
+	>>2,怎么安装redis？
+		1),从redis.io下载最新版redis-X.Y.Z.tar.gz后解压，然后进入redis-X.Y.Z文件夹后直接make即可，安装非常简单。
+		make成功后会在src文件夹下产生一些二进制可执行文件，包括redis-server、redis-cli等等：
+		配置环境变量:make install
+		2),命令
+		$ find . -type f -executable
+		./redis-benchmark //用于进行redis性能测试的工具
+		./redis-check-dump //用于修复出问题的dump.rdb文件
+		./redis-cli //redis的客户端
+		./redis-server //redis的服务端
+		./redis-check-aof //用于修复出问题的AOF文件
+		./redis-sentinel //用于集群管理
+		redis-server redis.conf
+		关闭redis命令  redis-cli shutdown
+		redis-cli -p 6379 shutdown	
+		
+	>>3,redis数据结构 – 简介
+		redis是一种高级的key:value存储系统，其中value支持五种数据类型：
+
+		1.字符串（strings）
+		2.字符串列表（lists）
+		3.字符串集合（sets）
+		4.有序字符串集合（sorted sets）
+		5.哈希（hashes）
+
+		而关于key，有几个点要提醒大家：
+
+		1.key不要太长，尽量不要超过1024字节，这不仅消耗内存，而且会降低查找的效率；
+		2.key也不要太短，太短的话，key的可读性会降低；
+		3.在一个项目中，key最好使用统一的命名模式，例如user:10000:passwd。
+		redis持久化 – 两种方式】
+
+		redis提供了两种持久化的方式，分别是RDB（Redis DataBase）和AOF（Append Only File）。
+		RDB，简而言之，就是在不同的时间点，将redis存储的数据生成快照并存储到磁盘等介质上；
+		AOF，则是换了一个角度来实现持久化，那就是将redis执行过的所有写指令记录下来，在下次redis重新启动时，只要把这些写指令从前到后再重复执行一遍，就可以实现数据恢复了。
+	>>4，需求说明(为什么用redis)
+		特点:经常访问的数据,并且变化不大的数据添加缓存
+		需求说明:将商品分类信息添加到缓存中.
+		实现思路:
+		1.	当用户点击按钮时,应该先查询缓存
+		2.	如果缓存数据为null,这时应该查询后台数据库,将查询到的结果通过工具类转化为JSON串.之后将数据保存到redis中key:value
+		之后将查询的结果返回.
+		3.	如果缓存数据不为null,需要通过工具API将JSON串转化为java对象.之后返回数据.
+
+	[Redis参考引用文章地址:]
+		1，https://blog.csdn.net/liqingtx/article/details/60330555
+		2，https://www.cnblogs.com/rjzheng/p/9096228.html
+		3,达内刘昱江老师笔记
+优化:
+lucene/solr
+sso单点登录优化
+
+docker
+	docker五大要素：
+	1,沙箱:	隔离,将必要的资源隔离，防止互相影响
+	2,镜像:	做好的模板.特点:只读、可拆分、传输用dockerfile（坐标）
+	3,容器:	镜像的实例，容器可写。可以保存应用产生的临时文件，但是关闭容器，数据清除。
+	4,数据卷:	挂载到容器中，用于保存必要数据。
+	5,仓库:	和maven仓库概念一致
+
+	docker缺点：
+		不太好docker部署数据库（数据太杂）
+
+	修改静态ip：
+		vim /etc/sysconfig/network-scripts/ifcfg-ens33
+		修改：IPADDR：原则是改成和虚拟机同网关的ip，地址不冲突就行
+			 GATEWAY：改成虚拟机网关
+			 DNS1：改成虚拟机网关（不写也行）
+
+		重启服务：service network restart
+
+	
+---------------------------------------------------------------------
+>hashmap
+	>>hashmap手册解释:
+		第一段:
+			hashmap继承map.hashmap和hashtable大致相等,除了hashmap是非同步和允许null值.hashmap是线程不安全、允许键值为null和无序的(这是为什么叫散列表)
+		第二段:
+			 因此，不设置初始值非常重要,如果迭代性能如此，则容量太高（或负载因子太低）很重要。
+		第三段:
+			HashMap的实例有两个参数会影响它.初始容量,负载因子(load factor).
+				容量是哈希表中的桶数，以及初始值容量就是创建哈希表时的容量
+				hashMap的容量会自动增加,在其增加之前,load factor是一个衡量哈希表被允许填满程度的指标
+				当hashmap中村的数据超过负载因子(load factor),hash表重新hash(rehashed),之后hash桶是之前的两倍
+		第四段:
+			默认的负载因子(.75)提供了一个很好的时间和空间成本之间的权衡
+		第五段:
+			使用许多具有相同{@code hashCode()}的键肯定会减慢速度任何哈希表的性能下降。改善影响，当键{@link Comparable}，这个类可以使用比较顺序帮助解开领带的钥匙。
+		第六段:
+			注意这个实现不是同步的。
+			如果多个线程并发地访问哈希映射，则至少有一个哈希映射线程在结构上修改映射，它必须外部同步。
+			结构修改是任何操作添加或删除一个或多个映射;仅仅是改变的值与实例已经包含的键关联的不是键结构修改。)
+			这通常是由对自然封装映射的对象进行同步
+		第七段:
+			...是个例子
+			如果不存在这样的对象，则应该使用
+			 # synchronizedMap Collections . synchronizedMap } { @link集合
+			方法。这最好在创建时完成，以防止意外
+			对映射的非同步访问:
+			Map m =集合。synchronizedMap(新HashMap(…));
+			如果映射在任何时间之后发生结构修改迭代器是通过迭代器自己的方式创建的删除方法，迭代器将抛出一个ConcurrentModificationException 
+		第九段:
+			迭代器的快速失败行为只能用于检测bug。
+		
+	>>1,什么是hashmap?
+		HashMap是基于哈希表的 Map 接口的实现。HashMap是基于哈希表实现的，每一个元素是一个key-value对，其内部通过单链表解决冲突问题，容量不足（超过了阀值）时，同样会自动增长。
+	>>2,为什么要用到hashmap?
+		hashmap的键值对可以存null值,hashmap是非synchronized;hashmap存值很快****<<<这是最基本
+	>>3,hashmap的工作原理
+		>>>0,什么是hashcode?
+			>>>>1,hash和hash表是什么？　　　
+				想要知道这个hashcode，首先得知道hash，通过百度百科看一下
+　　　　　　		hash是一个函数，该函数中的实现就是一种算法，就是通过一系列的算法来得到一个hash值，这个时候，我们就需要知道另一个东西，
+　　　　　　		hash表，通过hash算法得到的hash值就在这张hash表中，也就是说，hash表就是所有的hash值组成的，有很多种hash函数，也就代表着有很多种算法得到hash值
+　　　　　　	>>>>2,hashcode是什么?
+　　　　　　		hashcode就是通过hash函数得来的，通俗的说，就是通过某一种算法得到的，hashcode就是在hash表中有对应的位置。
+　　　　　　		每个对象都有hashcode，对象的hashcode怎么得来的呢？
+　　　　　　　　　首先一个对象肯定有物理地址，在别的博文中会hashcode说成是代表对象的地址，这里肯定会让读者形成误区，对象的物理地址跟这个hashcode地址不一样，
+　　　　　　　　　hashcode代表对象的地址说的是对象在hash表中的位置，物理地址说的对象存放在内存中的地址，那么对象如何得到hashcode呢？
+　　　　　　　　　重点>>>>通过对象的内部地址(也就是物理地址)转换成一个整数，然后该整数通过hash函数的算法就得到了hashcode，所以，hashcode是什么呢？
+　　　　　　　　　就是在hash表中对应的位置。这里如果还不是很清楚的话，举个例子，hash表中有 hashcode为1、hashcode为2、(...)3、4、5、6、7、8这样八个位置，
+			   有一个对象A，A的物理地址转换为一个整数17(这是假如)，就通过直接取余算法，17%8=1，那么A的hashcode就为1，且A就在hash表中1的位置。
+			   肯定会有其他疑问，接着看下面，这里只是举个例子来让你们知道什么是hashcode的意义
+			>>>>3,为什么要hashcode?
+				HashCode的存在主要是为了查找的快捷性，不用和全部的键值对去比较.找到相同hashcode之后,只和其链表上的键值对进行比较
+			>>>>4,hashcode()方法
+				>>>>>1,在hashcode相同的时候,hashmap.class中的hashcode()和equals()用来比较相同的hashcode是不是同一个对象.
+						public final int hashCode() {
+		            		return Objects.hashCode(key) ^ Objects.hashCode(value);
+		        		}
+        		
+				>>>>>2,public final boolean equals(Object o) {
+			            if (o == this)		//直接判断新添加进来的对象和比较的这个是不是一个对象
+			                return true;
+			            if (o instanceof Map.Entry) {
+			                Map.Entry<?,?> e = (Map.Entry<?,?>)o;
+			                if (Objects.equals(key, e.getKey()) &&		//判断
+			                    Objects.equals(value, e.getValue()))
+			                    return true;
+			            	}
+			            	return false;
+			        	}
+			        		使用Map.Entry类，你可以得到在同一时间得到所有的信息.
+		        			这个方法返回一个Map.Entry实例化后的对象集。接着，Map.Entry类提供了一个getKey()方法和一个getValue()方法
+		        			Set entries = map.entrySet( );
+								if(entries != null) {
+								Iterator iterator = entries.iterator( );
+								while(iterator.hasNext( )) {
+									Map.Entry entry =iterator.next( );
+									Object key = entry.getKey( );
+									Object value = entry.getValue();
+									;....
+								}
+							} 
+		HashMap是基于hashing的原理，我们使用put(key, value)存储对象到HashMap中，使用get(key)从HashMap中获取对象。
+		当我们给put()方法传递键和值时，我们先对键调用hashCode()方法，返回的hashCode用于找到bucket位置来储存Entry对象。
+		”这里关键点在于指出，HashMap是在bucket中储存键对象和值对象，作为Map.Entry。这一点有助于理解获取对象的逻辑。
+		如果你没有意识到这一点，或者错误的认为仅仅只在bucket中存储值的话，你将不会回答如何从HashMap中获取对象的逻辑。
+		这个答案相当的正确，也显示出面试者确实知道hashing以及HashMap的工作原理。
+		Associates the specified value with the specified key in this map.
+	     If the map previously contained a mapping for the key, the old
+	     value is replaced.
+	     
+	     @param key key with which the specified value is to be associated
+	     @param value value to be associated with the specified key
+	     @return the previous value associated with <tt>key</tt>, or
+	              <tt>null</tt> if there was no mapping for <tt>key</tt>.
+	              (A <tt>null</tt> return can also indicate that the map
+	              previously associated <tt>null</tt> with <tt>key</tt>.)
+	     
+	    public V put(K key, V value) {
+	        return putVal(hash(key), key, value, false, true);
+	    }
+
+		    
+	     Returns the value to which the specified key is mapped,
+	     or {@code null} if this map contains no mapping for the key.
+	     
+	     <p>More formally, if this map contains a mapping from a key
+	     {@code k} to a value {@code v} such that {@code (key==null ? k==null :
+	     key.equals(k))}, then this method returns {@code v}; otherwise
+	      it returns {@code null}.  (There can be at most one such mapping.)
+	     
+	      <p>A return value of {@code null} does not <i>necessarily</i>
+	     indicate that the map contains no mapping for the key; it's also
+	     possible that the map explicitly maps the key to {@code null}.
+	     The {@link #containsKey containsKey} operation may be used to
+	      distinguish these two cases.
+	     
+	     @see #put(Object, Object)
+	     /
+	    public V get(Object key) {
+	        Node<K,V> e;
+	        return (e = getNode(hash(key), key)) == null ? null : e.value;
+	    }
+
+		>>>1,hashmap的主要参数都有哪些？hashmap的数据结构是什么样子的？自己如何实现一个hashmap？hash计算规则是什么？
+			1）桶（capacity）容量，即数组长度：DEFAULT_INITIAL_CAPACITY=1<<4；默认值为16
+
+			　　即在不提供有参构造的时候，声明的hashmap的桶容量；
+
+			2）MAXIMUM_CAPACITY = 1 << 30;
+
+			　　极限容量，表示hashmap能承受的最大桶容量为2的30次方，超过这个容量将不再扩容，让hash碰撞起来吧！
+
+			3）static final float DEFAULT_LOAD_FACTOR = 0.75f;
+
+			　　负载因子（loadfactor，默认0.75），负载因子有个奇特的效果，表示当当前容量大于（size/）时，将进行hashmap的扩容，扩容一般为扩容为原来的两倍。
+
+			4）int threshold;阈值
+
+			　　阈值算法为capacity*loadfactory，大致当map中entry数量大于此阈值时进行扩容（1.8）
+
+			5）transient Entry<K,V>[] table = (Entry<K,V>[]) EMPTY_TABLE;（默认为空{}）
+
+　　		核心的数据结构，即所谓的数组+链表的部分。
+　　			主要数据结构即为数组+链表。
+			　　在hashmap中的主要表现形式为一个table，类型为Entry<K,V>[] table
+			　　首先是一个Entry型的数组，Entry为hashmap的内部类：
+			static class Entry<K,V> implements Map.Entry<K,V> {
+			         final K key;
+			         V value;
+			         Entry<K,V> next;
+			         int hash;
+			 }
+			 　在这里可以看到，在Entry类中存在next，所以，它又是链表的形式。
+			hash计算规则是什么？：
+			static final int hash(Object key) {
+			         int h;
+			         return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
+			     }
+		>>>2,如果两个对象的hashcode相等,如何获取对象?
+			如果没有假设的话,一般桶中只有一个元素的话(我猜的大致这样),HashMap会使用键对象的hashcode找到bucket位置，然后获取值对象
+			真正的办法是,找到bucket位置之后，会调用keys.equals()方法去找到链表中正确的节点，最终找到要找的值对象
+			一些优秀的开发者会指出使用不可变的、声明作final的对象，并且采用合适的equals()和hashCode()方法的话，将会减少碰撞的发生，提高效率。
+			不可变性使得能够缓存不同键的hashcode，这将提高整个获取对象的速度，使用String，Interger这样的wrapper类作为键是非常好的选择。
+			>>>>1,hashcode()和equals()区别?
+				 因为重写的equal（）里一般比较的比较全面比较复杂，这样效率就比较低，而利用hashCode()进行对比，则只要生成一个hash值进行比较就可以了，效率很高，
+				 那么hashCode()既然效率这么高为什么还要equal()呢？
+           		 因为hashCode()并不是完全可靠，有时候不同的对象他们生成的hashcode也会一样（生成hash值得公式可能存在的问题），所以hashCode()只能说是大部分时候可靠，
+           		 并不是绝对可靠，所以我们可以得出：
+	         		1.equal()相等的两个对象他们的hashCode()肯定相等，也就是用equal()对比是绝对可靠的。
+	         		2.hashCode()相等的两个对象他们的equal()不一定相等，也就是hashCode()不是绝对可靠的。
+	         	所有对于需要大量并且快速的对比的话如果都用equal()去做显然效率太低，所以解决方式是，每当需要对比的时候，首先用hashCode()去对比，
+	         	如果hashCode()不一样，则表示这两个对象肯定不相等（也就是不必再用equal()去再对比了）,
+	         	如果hashCode()相同，此时再对比他们的equal()，如果equal()也相同，则表示这两个对象是真的相同了，这样既能大大提高了效率也保证了对比的绝对正确性！
+	    >>>3,“如果HashMap的大小超过了负载因子(load factor)定义的容量，怎么办？”
+			 默认的负载因子大小为0.75，也就是说，当一个map填满了75%的bucket时候，和其它集合类(如ArrayList等)一样，
+			 将会创建原来HashMap大小的两倍的bucket数组，来重新调整map的大小，并将原来的对象放入新的bucket数组中。这个过程叫作rehashing，因为它调用hash方法找到新的bucket位置
+		>>>4,“你了解重新调整HashMap大小存在什么问题吗？”
+			你可能回答不上来，这时面试官会提醒你当多线程的情况下，可能产生条件竞争(race condition)。
+			当重新调整HashMap大小的时候，确实存在条件竞争，因为如果两个线程都发现HashMap需要重新调整大小了，它们会同时试着调整大小。
+			在调整大小的过程中，存储在链表中的元素的次序会反过来，因为移动到新的bucket位置的时候，HashMap并不会将元素放在链表的尾部，而是放在头部，
+			这是为了避免尾部遍历(tail traversing)。如果条件竞争发生了，那么就死循环了。这个时候，你可以质问面试官，为什么这么奇怪，要在多线程的环境下使用HashMap呢？：）
+		>>>5,“为什么String, Interger这样的wrapper类适合作为键？”
+ 			String, Interger这样的wrapper类作为HashMap的键是再适合不过了，而且String最为常用。因为String是不可变的，也是final的，而且已经重写了equals()和hashCode()方法了。
+ 			其他的wrapper类也有这个特点。不可变性是必要的，因为为了要计算hashCode()，就要防止键值改变，如果键值在放入时和获取时返回不同的hashcode的话，那么就不能从HashMap中找到你想要的对象。
+ 			不可变性还有其他的优点如线程安全。如果你可以仅仅通过将某个field声明成final就能保证hashCode是不变的，那么请这么做吧。因为获取对象的时候要用到equals()和hashCode()方法，
+ 			那么键对象正确的重写这两个方法是非常重要的。如果两个不相等的对象返回不同的hashcode的话，那么碰撞的几率就会小些，这样就能提高HashMap的性能。
+
+			“我们可以使用自定义的对象作为键吗？ ”这是前一个问题的延伸。当然你可能使用任何对象作为键，只要它遵守了equals()和hashCode()方法的定义规则，
+			并且当对象插入到Map中之后将不会再改变了。如果这个自定义对象时不可变的，那么它已经满足了作为键的条件，因为当它创建之后就已经不能改变了。
+
+		>>>6,“我们可以使用CocurrentHashMap来代替Hashtable吗？”
+			这是另外一个很热门的面试题，因为ConcurrentHashMap越来越多人用了。我们知道Hashtable是synchronized的，但是ConcurrentHashMap同步性能更好，
+			因为它仅仅根据同步级别对map的一部分进行上锁。ConcurrentHashMap当然可以代替HashTable，但是HashTable提供更强的线程安全性。
+
+			这些问题设计哪些知识点：
+
+			hashing的概念
+			HashMap中解决碰撞的方法
+			equals()和hashCode()的应用，以及它们在HashMap中的重要性
+			不可变对象的好处
+			HashMap多线程的条件竞争
+			重新调整HashMap的大小
+			总结
+			HashMap的工作原理*****<<<<重要
+			HashMap基于hashing原理，我们通过put()和get()方法储存和获取对象。当我们将键值对传递给put()方法时，它调用键对象的hashCode()方法来计算hashcode，让后找到bucket位置来储存值对象。
+			当获取对象时，通过键对象的equals()方法找到正确的键值对，然后返回值对象。HashMap使用链表来解决碰撞问题，当发生碰撞了，对象将会储存在链表的下一个节点中。 HashMap在每个链表节点中储存键值对对象。
+
+			当两个不同的键对象的hashcode相同时会发生什么？ 它们会储存在同一个bucket位置的链表中。键对象的equals()方法用来找到键值对。
+
+			因为HashMap的好处非常多，在电子商务的应用中使用HashMap作为缓存。因为金融领域非常多的运用Java，也出于性能的考虑，我们会经常用到HashMap和ConcurrentHashMap。
+	[HashMap参考引用文章地址:]
+		1,https://www.cnblogs.com/whgk/p/6071617.html
+		2,https://blog.csdn.net/shengmingqijiquan/article/details/73801228
+		3,jdk1.8.0_172的HashMap源码
+		4,https://www.cnblogs.com/keyi/p/7119825.html
+
+>RestFul
+
+>SpringMVC ,Spring , Mybatis
+	>>1,什么是SPringMVC,Spring,Mtbatis?
+		1),什么是SPringMVC?
+			Spring MVC 是一个模型 - 视图 - 控制器（MVC）的Web框架建立在中央前端控制器.
+			Spring MVC 是 Spring 产品组合的一部分，它享有 Spring IoC容器紧密结合Spring松耦合等特点，因此它有Spring的所有优点。
+		2),什么是Spring?
+			Spring框架是一个为Java应用程序的开发提供了综合、广泛的基础性支持的Java平台。Spring帮助开发者解决了开发中基础性的问题，使得开发人员可以专注于应用程序的开发。
+			Spring框架本身亦是按照设计模式精心打造，这使得我们可以在开发环境中安心的集成Spring框架，不必担心Spring是如何在后台进行工作的。
+       		Spring框架至今已集成了20多个模块。这些模块主要被分如下图所示的核心容器、数据访问/集成,、Web、AOP（面向切面编程）、工具、消息和测试模块。
+       	3),什么是Mybatis?
+       		MyBatis 是支持普通 SQL 查询，存储过程和高级映射的优秀持久层框架。 MyBatis 消除了几乎所有的 JDBC 代码和参数的手工设置以及对结果集的检索。 MyBatis 可以使用简单的XML 或注解用于配置和原始映射，将接口和 Java 的 POJO（ Plain Old Java Objects，普通的Java 对象）映射成数据库中的记录.
+
+			  1）MyBATIS 目前提供了三种语言实现的版本，包括：Java、.NET以及Ruby。（我主要学习java，就讲java的使用）
+			  2）它提供的持久层框架包括SQL Maps和Data Access Objects（DAO）。
+			  3）mybatis与hibernate的对比？
+
+			   mybatis提供一种“半自动化”的ORM实现。
+			   这里的“半自动化”，是相对Hibernate等提供了全面的数据库封装机制的“全自动化”ORM实现而言，“全自动”ORM实现了POJO和数据库表之间的映射，以及 SQL 的自动生成和执行。
+
+    而mybatis的着力点，则在于POJO与SQL之间的映射关系。
+	>>2, Spring MVC的请求流程：
+	    第一步：发起请求到前端控制器(DispatcherServlet)
+	    第二步：前端控制器请求HandlerMapping查找Handler可以根据xml配置、注解进行查找
+	    第三步：处理器映射器HandlerMapping向前端控制器返回Handler
+	   	第四步：前端控制器调用处理器适配器去执行Handler
+	    第五步：处理器适配器去执行Handler
+	    第六步：Handler执行完成给适配器返回ModelAndView
+	    第七步：处理器适配器向前端控制器返回ModelAndView。ModelAndView是springmvc框架的一个底层对象，包括 Model和view
+	    第八步：前端控制器请求视图解析器去进行视图解析，根据逻辑视图名解析成真正的视图(jsp)
+	    第九步：视图解析器向前端控制器返回View
+	    第十步：前端控制器进行视图渲染。视图渲染将模型数据(在ModelAndView对象中)填充到request域
+	    第十一步：前端控制器向用户响应结果
+
+	    -----------------------------------------------------------------------------------
+	    1,(web.xml)启动tomcat时加载web.xml.配置过滤器处理全站POST乱码.配置监听器.配置dispatcherServlet处理用户请求
+	    2,在web.xml中定义的定时器,启动tomcat是初始化spring容器.
+	    	spring容器(管理service层):
+    		applicationContext.xml配置
+    			1),开启包扫描 <context:component-scan base-package="com.jt"/>
+    			2),管理数据源
+    				<bean id="dataSource" class="com.alibaba.druid.pool.DruidDataSource">
+				        <property name="driverClassName" value="${jdbc.driverClassName}" />
+				        <property name="url" value="${jdbc.url}" />
+				        <property name="username" value="${jdbc.username}" />
+				        <property name="password" value="${jdbc.password}" />
+				    </bean>
+
+				3),配置声明式事务处理
+					<!--配置声明式事务处理的步骤	1.配置事物管理器   2.定义事物事物通知     3.配置事物切面 -->
+					<!--定义事务管理器  -->
+					<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+						<!--配置数据源  -->
+						<property name="dataSource" ref="dataSource"/>
+					</bean>
+				4),整合Mybatis
+					(1)添加核心配置文件
+					(2)添加所有映射文件
+		[前期准备]
+		3,客户端request请求,到达dispatcherServlet.根据HandlerMapping中查找匹配的Controller,执行其方法.
+		4,SpringMVC(管理Controller岑):
+			springmvc.xml配置:
+			1),开启SpringMVC注释 	<mvc:annotation-driven/>
+			2),开启包扫描	 <!-- <context:component-scan base-package="com.jt.manage.controller"/> -->
+			3),配置视图解析器
+				<!--定义视图解析器  -->
+				<bean class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+					<!--定义前缀和后缀  -->
+					<property name="prefix" value="/WEB-INF/views/"/>
+					<property name="suffix" value=".jsp"/>
+				</bean>
+			4),配置文件上传解析器(没有这个业务需求可以不写)
+				<!--配置文件上传视图解析器
+				说明:id值必须写死,否则需要多余的配置项.
+				-->
+				<bean id="multipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver">
+				<property name="maxUploadSize" value="10485670"/>
+				<property name="defaultEncoding" value="UTF-8"/>
+				</bean>
+		5,调用Spring的Service层,Service调用Mybatis
+		6,Mybatis(管理Mapper层)
+			applicationContext-mybatis.xml配置
+			1),配置SqlSessionFactory   <bean id="sqlSessionFactoryBean" class="org.mybatis.spring.SqlSessionFactoryBean">
+				(1),配置其属性数据源
+				<!--引入数据源  -->
+				<property name="dataSource" ref="dataSource"/>
+				(2),配置mybatis-config.xml核心配置
+					<!--引入mybatis配置文件  -->
+					<property name="configLocation" value="classpath:/mybatis/mybatis-config.xml"/>
+				(3)添加mapper映射文件
+					<!--引入映射文件  -->
+					<property name="mapperLocations" value="classpath:/mybatis/mappers/*.xml"/>
+				(4)配置别名包
+					<property name="typeAliasesPackage" value="com.jt.manage.pojo"/>
+			2)为Mapper接口生成代理对象
+				mybatis-config.xml
+				(1)配置驼峰映射插件
+						<!-- 1.全局配置：驼峰规则；禁用二级缓存redis -->
+						<settings>
+							<setting name="mapUnderscoreToCamelCase" value="true" />
+							<setting name="cacheEnabled" value="false"/>
+						</settings>
+				(2),配置第三方缓存插件
+					<!-- 2.mybatis 插件配置，通用Mapper基于拦截器 -->
+					<plugins>
+						<!-- 分页插件：com.github.pagehelper为PageHelper类所在包名 -->
+						<plugin interceptor="com.github.pagehelper.PageHelper">
+							<!-- 方言 -->
+							<property name="dialect" value="mysql" />
+							<!-- 该参数默认为false -->
+							<!-- 设置为true时，使用RowBounds分页会进行count查询，查询数据总条数 -->
+							<property name="rowBoundsWithCount" value="true" />
+						</plugin>
+							
+						<plugin interceptor="com.github.abel533.mapperhelper.MapperInterceptor">
+							<!-- 自增策略是哪个数据库 -->
+							<property name="IDENTITY" value="MYSQL"/>
+							<!-- 实现扩展基础类 -->
+							<property name="mappers" value="com.jt.common.mapper.SysMapper"/>
+						</plugin>
+					</plugins>
+
+			3),配置结果集自动映射:
+				(1),定义namespace命名空间
+					<mapper namespace="com.jt.manage.mapper.ItemCatMapper">
+				(2),定义CRUID的SQL语句 	
+						<!-- 带排序字段 -->
+						<select id="findAll" resultType="ItemCat">
+							select * from tb_item_cat order by parent_id,sort_order
+						</select>
+					</mapper>
+		7,访问数据库,返回数据->配置视图解析器->Response  
+	>>3,web.xml
+	    启动tomcat的时候默认加载的是web.xml,.web.xml文件是用来初始化配置信息：比如Welcome页面、servlet、servlet-mapping、filter、listener、
+	    启动加载级别等。当你的web工程没用到这些时，你可以不用web.xml文件来配置你的Application
+	    context-param &gt;&gt; listener &gt;&gt; fileter &gt;&gt; servlet。（web.xml 加载顺序这个很重要的）
+	    启动WEB项目的时候，容器首先会去读取web.xml配置文件中的两个节点：<listener> </listener>和<context-param> </context-param>
+	    具体看这块:->https://www.cnblogs.com/Y-oung/p/8401549.html
+	    load-on-startup：表示启动容器时初始化该Servlet；
+		url-pattern：表示哪些请求交给Spring Web MVC处理， "/" 是用来定义默认servlet映射的。也可以如"*.html"表示拦截所有以html为扩展名的请求。
+		在Spring MVC中，每个DispatcherServlet都持有一个自己的上下文对象WebApplicationContext，它又继承了根（root）WebApplicationContext对象中已经定义的所有bean。
+		这些继承的bean可以在具体的Servlet实例中被重载，在每个Servlet实例中你也可以定义其scope下的新bean。
+		WebApplicationContext继承自ApplicationContext，它提供了一些web应用经常需要用到的特性。它与普通的ApplicationContext不同的地方在于，它支持主题的解析，\
+		并且知道它关联到的是哪个servlet（它持有一个该ServletContext的引用）
+		
+	    不同的web.xml配置不一样
+	    1,定义前端控制器  servlet第一次请求时才会加载启动.
+		2,扫描全部以applicationContext开通的配置文件.
+		3,让servlet第一个加载
+		4,请求路径
+		5,定义POST乱码解决
+		
+
+		2->:
+			<!-- 指定SpringMVC配置文件 -->
+			<init-param>
+				<param-name>contextConfigLocation</param-name>
+				<param-value>classpath:/spring/applicationContext*.xml</param-value>
+			</init-param>
+			<context:component-scan/> 扫描指定的包中的类上的注解，常用的注解有：
+
+			@Controller 声明Action组件
+			@Service    声明Service组件    @Service("myMovieLister") 
+			@Repository 声明Dao组件
+			@Component   泛指组件, 当不好归类时. 
+			@RequestMapping("/menu")  请求映射
+			@Resource  用于注入，( j2ee提供的 ) 默认按名称装配，@Resource(name="beanName") 
+			@Autowired 用于注入，(srping提供的) 默认按类型装配 
+			@Transactional( rollbackFor={Exception.class}) 事务管理
+			@ResponseBody
+			@Scope("prototype")   设定bean的作用域
+			
+		spring bean作用域和生命周期
+			默认的bean是单例的，也就是说只有spring 容器关闭的时候才会销毁这些bean对象，如果声明的bean对象是prototype类型的话，就非单例了，
+			 那么这些对象将不由spring容器维护，该对象没有引用的时候jvm会适时垃圾回收掉
+			一、Spring Framework支持五种作用域（其中有三种只能用在基于web的Spring ApplicationContext）。 
+			内置支持的作用域分列如下：
+			作用域 
+			singleton 在每个Spring IoC容器中一个bean定义对应一个对象实例。
+
+			prototype 一个bean定义对应多个对象实例。
+
+			request 在一次HTTP请求中，一个bean定义对应一个实例；即每次HTTP请求将会有各自的bean实例， 它们依据某个bean定义创建而成。
+			该作用域仅在基于web的Spring ApplicationContext 情形下有效。
+
+			session 在一个HTTP Session 中，一个bean定义对应一个实例。该作用域仅在基于web的SpringApplicationContext 情形下有效。
+
+			global session 在一个全局的HTTP Session 中，一个bean定义对应一个实例。典型情况下，仅在使用portlet context的时候有效。
+			该作用域仅在基于web的Spring ApplicationContext 情形下有效。
+
+			这Spring框架中，一旦把一个bean纳入到Spring IoC容器之中，这个bean的生命周期就会交由容器进行管理，一般担当管理者角色的是BeanFactory或ApplicationContext。认识一下Bean的生命周期活动，对更好的利用它有很大的帮助。
+
+			生命周期:
+			    下面以BeanFactory为例，说明一个Bean的生命周期活动：
+			Bean的建立
+			      由BeanFactory读取Bean定义文件，并生成各个实例。
+
+			Setter注入
+			      执行Bean的属性依赖注入。
+
+			BeanNameAware的setBeanName()
+			      如果Bean类实现了org.springframework.beans.factory.BeanNameAware接口，则执行其setBeanName()方法。
+
+			BeanFactoryAware的setBeanFactory()
+			      如果Bean类实现了org.springframework.beans.factory.BeanFactoryAware接口，则执行其setBeanFactory()方法。
+
+			BeanPostProcessors的processBeforeInitialization()
+			      容器中如果有实现org.springframework.beans.factory.BeanPostProcessors接口的实例，则任何Bean在初始化之前都会执行这个实例的processBeforeInitialization()方法。
+
+			InitializingBean的afterPropertiesSet()
+			      如果Bean类实现了org.springframework.beans.factory.InitializingBean接口，则执行其afterPropertiesSet()方法。
+
+			Bean定义文件中定义init-method
+			      在Bean定义文件中使用“init-method”属性设定方法名称，如下：
+
+			<bean id="demoBean" class="com.yangsq.bean.DemoBean" init-method="initMethod">
+			  .......
+			 </bean>
+
+			      这时会执行initMethod()方法，注意，这个方法是不带参数的。
+
+			BeanPostProcessors的processAfterInitialization()
+			      容器中如果有实现org.springframework.beans.factory.BeanPostProcessors接口的实例，则任何Bean在初始化之前都会执行这个实例的processAfterInitialization()方法。
+
+			DisposableBean的destroy()
+			      在容器关闭时，如果Bean类实现了org.springframework.beans.factory.DisposableBean接口，则执行它的destroy()方法。
+
+			Bean定义文件中定义destroy-method
+			      在容器关闭时，可以在Bean定义文件中使用“destory-method”定义的方法
+
+			<bean id="demoBean" class="com.yangsq.bean.DemoBean" destory-method="destroyMethod">
+			  .......
+			</bean>
+			 如果使用ApplicationContext来维护一个Bean的生命周期，则基本上与上边的流程相同，只不过在执行BeanNameAware的setBeanName()后，
+			 若有Bean类实现了org.springframework.context.ApplicationContextAware接口，则执行其setApplicationContext()方法，
+			 然后再进行BeanPostProcessors的processBeforeInitialization()
+	[Spring三大框架参考引用文章地址:]
+	    https://baijiahao.baidu.com/s?id=1588177248499145800&wfr=spider&for=pc
+	    https://blog.csdn.net/qq_22075041/article/details/78692780
+	    https://www.cnblogs.com/sunniest/p/4555801.html
+	    http://www.cnblogs.com/liangyihui/p/5917773.html
+		https://www.cnblogs.com/hellokitty1/p/5216025.html
+
+	    
+	    	Sping常见面试题：
+			http://www.cnblogs.com/liangyihui/p/5917773.html 
+			http://www.importnew.com/19538.html 
+
+			SpringMVC常见面试题：
+			http://www.cnblogs.com/wang-meng/p/5701987.html 
+			http://blog.csdn.net/xinghuo0007/article/details/53463897 
+
+			Mybatis常见面试题:
+			http://blog.csdn.net/eaphyy/article/details/71190441 
+			http://www.cnblogs.com/huajiezh/p/6415388.html 
+
+WebService是异构系统调用,底层用到xml
+Xml里面有很多标签对业务数据来说是无用,它会带来传输时,传输量增加.网络传输量越大性能越慢.然后本对象转换非常耗时.所以WEBService这项技术现在已经落伍了
+主流采用json的RESTFul.springCloud微服务中就用到这中方式,feign
+
+
+牛客网笔试题:
+1,继承:
+先父类静态―>子类静态―>父类非静态―>父类构造函数―>子类非静态―>子类构造函数
+2,
