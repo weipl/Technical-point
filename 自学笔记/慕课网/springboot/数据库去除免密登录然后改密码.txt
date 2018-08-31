@@ -1,0 +1,50 @@
+新安装的MySQL5.7，登录时提示密码错误，安装的时候并没有更改密码，后来通过免密码登录的方式更改密码，输入update mysql.user  set password=password('root') where user='root'时提示ERROR 1054 (42S22): Unknown column 'password' in 'field list'，原来是mysql数据库下已经没有password这个字段了，password字段改成了
+authentication_string
+所以更改语句替换为update mysql.user set authentication_string=password('root') where user='root' ;即可
+
+
+完整的更改MySQL密码的方式如下：
+
+1、找到C:\Windows\System\my.ini 在mysqld那段加入skip-grant-tables
+
+
+2、重启MySQL，
+
+
+3、终端输入 mysql 直接登录MySQL数据库，然后use mysql
+
+
+4、update mysql.user set authentication_string=password('root') where user='root' ;
+     改了密码之后要刷新权限输入->flush privileges;
+
+mysql5.7更改密码应该采用命令 ALTER USER 'root'@'localhost'IDENTIFIED BY '********'其中密码的命名规则有所改变，详见
+
+http://blog.csdn.net/u010603691/article/details/50541979
+
+5、编辑my.cnf文件删掉skip-grant-tables 这一行，然后重启MySQL，否则MySQL仍能免密码登录
+
+6、mysql -u root -p
+
+然后输入密码即可登录MySQL数据库
+登陆遇到错误：
+
+ERROR 1862 (HY000): Your password has expired. To log in you must
+change it using a client that supports expired passwords.
+
+
+
+原因是：
+
+MySQL 5.6 introduces password-expiration capability, to enable database administrators to expire account passwords and require users to reset their password. 
+
+
+
+所以只需重新修改下密码即可，修改方式如下：
+
+以root权限登录mysql：（这里我的账户是root，密码也是root）
+
+mysql -uroot -proot
+
+然后更改密码：
+
+SET PASSWORD = PASSWORD('root');
